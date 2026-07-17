@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rahasya — the logic of locks</title>
+<meta name="description" content="Rahasya is a private cryptography app for curious kids. Real cryptography — build every cipher, then break it. Start with Caesar's wheel, climb rung by rung to AES and RSA. Every cipher ships a Break it mode. Offline, ad-free, no AI. Sign in with Google to start.">
+<meta name="theme-color" content="#0B0E2E" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#F3F5FF" media="(prefers-color-scheme: light)">
+<meta property="og:title" content="Rahasya — the logic of locks">
+<meta property="og:description" content="Real cryptography for curious minds — build every cipher, then break it. A step-wise climb through the real standard algorithms, not invented toys. Sign in with Google to start.">
+<meta property="og:type" content="website">
+<link rel="icon" type="image/png" href="icon.png">
+<link rel="apple-touch-icon" href="icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg-deep:#0B0E2E; --bg-mid:#161A47; --gold:#F4C14E; --gold-soft:#f7d078;
+    --rose:#F0705A; --cyan:#49C8F0; --peri:#8E9BFF; --mint:#5AE08A;
+    --ink:#EAF0FF; --muted:#9AA4D8; --card:#161A47; --line:rgba(255,255,255,.10);
+    --grad:#1a2060; --gold-btn:#F4C14E; --on-gold:#231903;
+    --soft:rgba(255,255,255,.05); --soft2:rgba(255,255,255,.02); --soft-h:rgba(255,255,255,.09);
+    --chip-bg:rgba(244,193,78,.10); --chip-bd:rgba(244,193,78,.32);
+    --shadow:rgba(0,0,0,.45);
+  }
+  /* Light — mirrors the app's own light palette. */
+  @media (prefers-color-scheme: light){
+    :root:not([data-theme="dark"]){
+    color-scheme: light;
+    --bg-deep:#F3F5FF; --bg-mid:#FFFFFF; --grad:#FFFFFF;
+    --gold:#8A5A00; --gold-soft:#7d5200; --gold-btn:#E6A21C; --on-gold:#2A1D02;
+    --ink:#171B45; --muted:#5A6296; --card:#FFFFFF; --line:rgba(24,24,64,.12);
+    --rose:#D6472C; --cyan:#1F7F9C; --peri:#5866C0; --mint:#2E9A5E;
+    --soft:rgba(24,24,64,.045); --soft2:rgba(24,24,64,.025); --soft-h:rgba(24,24,64,.08);
+    --chip-bg:rgba(183,122,12,.10); --chip-bd:rgba(183,122,12,.32);
+    --shadow:rgba(30,40,90,.16);
+    }
+  }
+  :root[data-theme="light"]{
+    color-scheme: light;
+    --bg-deep:#F3F5FF; --bg-mid:#FFFFFF; --grad:#FFFFFF;
+    --gold:#8A5A00; --gold-soft:#7d5200; --gold-btn:#E6A21C; --on-gold:#2A1D02;
+    --ink:#171B45; --muted:#5A6296; --card:#FFFFFF; --line:rgba(24,24,64,.12);
+    --rose:#D6472C; --cyan:#1F7F9C; --peri:#5866C0; --mint:#2E9A5E;
+    --soft:rgba(24,24,64,.045); --soft2:rgba(24,24,64,.025); --soft-h:rgba(24,24,64,.08);
+    --chip-bg:rgba(183,122,12,.10); --chip-bd:rgba(183,122,12,.32);
+    --shadow:rgba(30,40,90,.16);
+  }
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0; font-family:Inter, system-ui, sans-serif; color:var(--ink);
+    background:radial-gradient(1100px 620px at 50% -8%, var(--grad), var(--bg-deep) 68%);
+    background-attachment:fixed; min-height:100vh; line-height:1.55;
+  }
+  a{color:var(--gold); text-decoration:none;}
+  .wrap{max-width:960px; margin:0 auto; padding:0 20px;}
+
+  /* Hero */
+  .hero{text-align:center; padding:70px 20px 40px;}
+  .hero-mark{width:112px; height:112px; border-radius:26px; display:block; margin:0 auto 16px; box-shadow:0 12px 34px var(--shadow);}
+  .kicker{font-size:13px; font-weight:700; letter-spacing:.16em; text-transform:uppercase; color:var(--muted); margin:0 0 14px;}
+  .wordmark{font-family:'Baloo 2', sans-serif; font-weight:800; font-size:clamp(40px, 8.5vw, 76px);
+    color:var(--gold); line-height:1.02; margin:0; letter-spacing:.5px;}
+  .tagline{font-family:'Baloo 2', sans-serif; font-weight:700; font-size:clamp(17px, 3vw, 23px); color:var(--ink); margin:10px 0 0;}
+  .lead{font-size:clamp(16px, 2.3vw, 20px); color:var(--ink); max-width:660px; margin:16px auto 0;}
+  .lead .w{color:var(--rose); font-weight:700;} .lead .c{color:var(--cyan); font-weight:700;}
+  .sub{color:var(--muted); max-width:610px; margin:12px auto 0; font-size:15.5px;}
+  .sub b{color:var(--gold-soft); font-weight:700;}
+  .cta-row{display:flex; flex-wrap:wrap; gap:12px; justify-content:center; margin-top:28px;}
+  .btn{display:inline-flex; align-items:center; gap:9px; font-weight:700; font-size:16px;
+    padding:15px 26px; border-radius:14px; border:1px solid transparent; cursor:pointer; transition:transform .12s ease, box-shadow .12s ease;}
+  .btn-primary{background:var(--gold-btn); color:var(--on-gold); box-shadow:0 10px 30px rgba(244,193,78,.28);}
+  .btn-primary:hover{transform:translateY(-2px); box-shadow:0 16px 40px rgba(244,193,78,.36);}
+  .btn-ghost{background:var(--soft); color:var(--ink); border-color:var(--line);}
+  .btn-ghost:hover{background:var(--soft-h);}
+  .chips-row{display:flex; flex-wrap:wrap; gap:9px; justify-content:center; margin-top:22px;}
+  .chip{display:inline-flex; align-items:center; gap:7px; padding:7px 15px; border-radius:999px;
+    background:var(--chip-bg); border:1px solid var(--chip-bd); color:var(--gold-soft); font-size:13px; font-weight:600;}
+
+  /* Sticky top strip — mirrors the sibling landing pages. */
+  .topbar{position:sticky; top:0; z-index:20; backdrop-filter:blur(10px);
+    background:color-mix(in srgb, var(--bg-deep) 80%, transparent); border-bottom:1px solid var(--line);}
+  .topbar .row{display:flex; align-items:center; justify-content:space-between; gap:14px; padding:12px 0;}
+  .mark{display:flex; align-items:center; gap:10px; font-family:'Baloo 2', sans-serif;
+    font-weight:800; font-size:18px; color:var(--ink);}
+  .mark img{width:34px; height:34px; border-radius:9px;}
+  .bar-actions{display:flex; align-items:center; gap:10px;}
+  .tbtn{border:1px solid var(--line); background:transparent; color:var(--ink); cursor:pointer;
+    width:38px; height:38px; border-radius:11px; font-size:16px; display:grid; place-items:center;}
+  .tbtn:hover{border-color:var(--gold);}
+  .topbar .btn{font-size:14.5px; padding:10px 18px; border-radius:12px;}
+  .btn:focus-visible, .tbtn:focus-visible{outline:3px solid var(--gold); outline-offset:2px;}
+  @media (max-width:460px){
+    .mark{font-size:15px;} .mark img{width:28px; height:28px;}
+    .topbar .btn{font-size:13px; padding:9px 13px;}
+  }
+
+  /* Sections */
+  section{padding:26px 0;}
+  h2{font-family:'Baloo 2', sans-serif; font-size:26px; text-align:center; margin:8px 0 6px;}
+  .section-sub{text-align:center; color:var(--muted); margin:0 auto 26px; max-width:620px; font-size:15px;}
+
+  /* How it works — 3 steps */
+  .steps{display:grid; grid-template-columns:repeat(3, 1fr); gap:16px;}
+  .step{background:var(--card); border:1px solid var(--line); border-radius:16px; padding:22px 18px; text-align:center;}
+  .step .n{font-family:'Baloo 2',sans-serif; font-weight:800; font-size:15px; color:var(--on-gold); background:var(--gold-btn);
+    width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; margin:0 auto 12px;}
+  .step h3{font-family:'Baloo 2', sans-serif; font-size:17px; margin:0 0 6px;}
+  .step p{margin:0; color:var(--muted); font-size:14px;}
+
+  /* Feature grid */
+  .grid{display:grid; grid-template-columns:repeat(3, 1fr); gap:16px;}
+  .feat{background:var(--card); border:1px solid var(--line); border-radius:16px; padding:20px 18px;}
+  .feat .i{font-size:26px; display:block; margin-bottom:10px;}
+  .feat h3{font-family:'Baloo 2', sans-serif; font-size:17px; margin:0 0 6px;}
+  .feat p{margin:0; color:var(--muted); font-size:14px;}
+
+  /* The ladder */
+  .ladder{display:flex; flex-direction:column; gap:8px; max-width:660px; margin:0 auto;}
+  .rung{display:flex; align-items:center; gap:12px; background:var(--soft); border:1px solid var(--line);
+    border-radius:14px; padding:12px 16px;}
+  .rung .n{font-family:'Baloo 2',sans-serif; font-weight:800; font-size:13px; color:var(--muted);
+    width:24px; flex:none; text-align:center;}
+  .rung .i{font-size:20px; flex:none; width:26px; text-align:center;}
+  .rung .t{font-weight:600; font-size:15px; flex:1; min-width:0;}
+  .rung .s{font-size:12px; font-weight:700; flex:none; padding:3px 10px; border-radius:999px;}
+  .rung.live{background:var(--chip-bg); border-color:var(--chip-bd);}
+  .rung.live .n, .rung.live .t{color:var(--ink);}
+  .rung.live .s{background:var(--mint); color:#08210f;}
+  .rung.soon .t{color:var(--muted);}
+  .rung.soon .s{background:var(--soft-h); color:var(--muted);}
+  :root[data-theme="light"] .rung.live .s{color:#fff; background:#2E9A5E;}
+  @media (prefers-color-scheme: light){ :root:not([data-theme="dark"]) .rung.live .s{color:#fff; background:#2E9A5E;} }
+
+  /* Access callout */
+  .access{background:linear-gradient(180deg, var(--soft), var(--soft2));
+    border:1px solid var(--line); border-radius:20px; padding:34px 26px; text-align:center; margin:10px 0 4px;}
+  .access h2{margin-top:0;}
+  .access p{color:var(--muted); max-width:560px; margin:0 auto 20px; font-size:15.5px;}
+
+  footer{text-align:center; color:var(--muted); font-size:12.5px; padding:34px 20px 46px; line-height:1.7;}
+  footer .disc{max-width:640px; margin:8px auto 0; opacity:.8;}
+  footer .fam{margin-top:10px;}
+
+  @media (max-width:720px){ .grid, .steps{grid-template-columns:1fr 1fr;} }
+  @media (max-width:460px){ .grid, .steps{grid-template-columns:1fr;} .hero{padding-top:52px;} .rung .s{display:none;} }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="wrap row">
+      <div class="mark"><img src="icon.png" alt="" width="34" height="34"> Rahasya</div>
+      <div class="bar-actions">
+        <button class="tbtn" id="themeToggle" type="button" aria-label="Switch light or dark theme" title="Switch theme">◐</button>
+        <a class="btn btn-primary" href="https://rahasya-cipher.web.app">Enter the app →</a>
+      </div>
+    </div>
+  </div>
+  <header class="hero">
+    <div class="wrap">
+      <p class="kicker">Real cryptography for curious kids</p>
+      <img class="hero-mark" src="icon.png" alt="Rahasya logo" width="112" height="112">
+      <h1 class="wordmark">Rahasya</h1>
+      <p class="tagline">The Logic of Locks</p>
+      <p class="lead">Real cryptography for curious minds — <span class="w">build</span> every cipher, then <span class="c">break</span> it. Spin a Caesar wheel to hide a message, then play the eavesdropper who cracks it in 25 guesses.</p>
+      <p class="sub"><b>Rahasya</b> — <i>meaning secret</i> — teaches the <b>real</b> standard algorithms, not invented toys. Each rung earns the next: a lock, then why it fails, then the lock that fixes it. The attacker is first-class, because you must think like one to build a good lock.</p>
+      <div class="cta-row">
+        <a class="btn btn-primary" href="https://rahasya-cipher.web.app">Enter Rahasya →</a>
+        <a class="btn btn-ghost" href="#access">Getting started</a>
+      </div>
+      <div class="chips-row">
+        <span class="chip">🔑 Sign in with Google</span>
+        <span class="chip">✈️ Works offline</span>
+        <span class="chip">🤖 No AI · pure computation</span>
+        <span class="chip">🚫 No ads · no tracking</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section>
+      <h2>How a rung works</h2>
+      <p class="section-sub">Every cipher is taught the same honest way — make it, attack it, then see why the next one exists.</p>
+      <div class="steps">
+        <div class="step"><div class="n">1</div><h3>Build it</h3><p>You're the sender. Type a message, turn the key, and watch the cipher scramble it live — every letter, as it happens.</p></div>
+        <div class="step"><div class="n">2</div><h3>Break it</h3><p>Now you're Eve, the eavesdropper. Attack the very lock you just built, with the real tool that beats it.</p></div>
+        <div class="step"><div class="n">3</div><h3>Learn why</h3><p>What just failed, and what fixes it — which hands you the next rung. No lock is presented as safe when it isn't.</p></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Why it helps</h2>
+      <div class="grid">
+        <div class="feat"><span class="i">🔬</span><h3>The real algorithms</h3><p>Not toy substitutions. AES, SHA-256 and RSA are the <b>actual standards</b> your bank uses — run for real in the browser via Web Crypto.</p></div>
+        <div class="feat"><span class="i">🥷</span><h3>The attacker is first-class</h3><p>Every cipher ships a <b>Break it</b> mode. A child who has cracked a lock understands it in a way no explanation delivers.</p></div>
+        <div class="feat"><span class="i">🪜</span><h3>Each rung earns the next</h3><p>Ciphers arrive in the order history discovered them — every one solving the exact weakness that killed the one before.</p></div>
+        <div class="feat"><span class="i">👁️</span><h3>Nothing is a black box</h3><p>A visible step-through shows what's happening inside — the shifts, the scores, the guesses. You can watch the machine think.</p></div>
+        <div class="feat"><span class="i">🏡</span><h3>Screen time, your call</h3><p>Optional parent controls: a profile for each child, a daily limit from 15 minutes to 2 hours behind your PIN, and a list of recent sessions.</p></div>
+        <div class="feat"><span class="i">✈️</span><h3>Private &amp; offline</h3><p>Ad-free, no tracking, works with no connection — and nothing a child types in a lesson is stored anywhere, not even by us.</p></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>The ladder</h2>
+      <p class="section-sub">The climb from a Roman wheel to the maths that guards the modern web. Built one rung at a time — the app shows the whole spine from day one, so a child always sees where they're headed.</p>
+      <div class="ladder">
+        <div class="rung live"><span class="n">1</span><span class="i">🎡</span><span class="t">Caesar's Wheel</span><span class="s">Live</span></div>
+        <div class="rung soon"><span class="n">2</span><span class="i">🔨</span><span class="t">Brute Force</span><span class="s">Soon</span></div>
+        <div class="rung soon"><span class="n">3</span><span class="i">📊</span><span class="t">Frequency Analysis</span><span class="s">Soon</span></div>
+        <div class="rung soon"><span class="n">4</span><span class="i">🔁</span><span class="t">Vigenère</span><span class="s">Soon</span></div>
+        <div class="rung soon"><span class="n">5</span><span class="i">🎲</span><span class="t">XOR &amp; the One-Time Pad</span><span class="s">Soon</span></div>
+        <div class="rung soon"><span class="n">6</span><span class="i">🧱</span><span class="t">AES — the real standard</span><span class="s">Soon</span></div>
+        <div class="rung soon"><span class="n">7</span><span class="i">🐧</span><span class="t">The ECB Penguin</span><span class="s">Soon</span></div>
+        <div class="rung soon"><span class="n">8</span><span class="i">🔢</span><span class="t">Hashing &amp; Passwords</span><span class="s">Soon</span></div>
+        <div class="rung soon"><span class="n">9</span><span class="i">🎨</span><span class="t">Diffie-Hellman</span><span class="s">Soon</span></div>
+        <div class="rung soon"><span class="n">10</span><span class="i">🔑</span><span class="t">RSA</span><span class="s">Soon</span></div>
+        <div class="rung soon"><span class="n">11</span><span class="i">🎭</span><span class="t">Man-in-the-Middle</span><span class="s">Soon</span></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Inside rung 1</h2>
+      <p class="section-sub">What a child actually does on the rung that's live today.</p>
+      <div class="grid">
+        <div class="feat"><span class="i">🎡</span><h3>Turn the wheel</h3><p>A rotating cipher disc. Type a message, pick a shift, and see the ciphertext form letter by letter.</p></div>
+        <div class="feat"><span class="i">🔨</span><h3>Crack all 25</h3><p>Eve grabs the scrambled message without the key — so she just tries every shift and reads which one is English.</p></div>
+        <div class="feat"><span class="i">🧠</span><h3>Meet Kerckhoffs</h3><p>Eve knew the method and broke it anyway. Only the <b>key</b> should need to be secret — the rule every real cipher obeys.</p></div>
+      </div>
+    </section>
+
+    <section id="access">
+      <div class="access">
+        <h2>Getting started</h2>
+        <p>Just sign in with your Google account and you're in — nothing to request or wait for. Questions? Reach out any time.</p>
+        <div class="cta-row" style="margin-top:0;">
+          <a class="btn btn-primary" href="https://rahasya-cipher.web.app">Sign in →</a>
+          <a class="btn btn-ghost" href="mailto:support.rahasya@gmail.com">Email support.rahasya@gmail.com</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <div>© <span id="yr">2026</span> Rahasya · Independently built for curious kids.</div>
+      <div class="disc">Calm, ad-free and private. No tracking or analytics — sign-in is used only for access control. Nothing a child types in a lesson leaves their browser.</div>
+      <div class="fam">Part of a small family of learning apps for curious kids.</div>
+    </div>
+  </footer>
+  <script>
+    document.getElementById('yr').textContent = new Date().getFullYear();
+    // Light/dark toggle. KEY is shared with the hub and the sibling landing pages — they're
+    // all one origin (yoggit.github.io), so a visitor's choice follows them across the family.
+    (function(){
+      var root = document.documentElement, KEY = 'apps-theme';
+      var btn = document.getElementById('themeToggle');
+      try{ var saved = localStorage.getItem(KEY);
+           if (saved === 'light' || saved === 'dark') root.setAttribute('data-theme', saved); }catch(e){}
+      btn.addEventListener('click', function(){
+        var cur = root.getAttribute('data-theme');
+        if(!cur) cur = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+        var next = cur === 'dark' ? 'light' : 'dark';
+        root.setAttribute('data-theme', next);
+        try{ localStorage.setItem(KEY, next); }catch(e){}
+      });
+    })();
+  </script>
+</body>
+</html>
